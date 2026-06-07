@@ -1,8 +1,11 @@
-from fastapi import FastAPI
 from contextlib import asynccontextmanager
+
+from fastapi import FastAPI
+
 from app.core.config import settings
-from app.core.database import connect_to_mongo, close_mongo_connection
-from app.routers import health
+from app.core.database import close_mongo_connection, connect_to_mongo
+from app.routers import auth, health, protected
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -12,12 +15,13 @@ async def lifespan(app: FastAPI):
     # Shutdown
     await close_mongo_connection()
 
-app = FastAPI(
-    title=settings.PROJECT_NAME,
-    lifespan=lifespan
-)
+
+app = FastAPI(title=settings.PROJECT_NAME, lifespan=lifespan)
 
 app.include_router(health.router)
+app.include_router(auth.router)
+app.include_router(protected.router)
+
 
 @app.get("/")
 async def root():
