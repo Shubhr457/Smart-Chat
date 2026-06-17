@@ -1,3 +1,4 @@
+import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict
 
@@ -20,8 +21,14 @@ def hash_password(password: str) -> str:
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    """Return True if *plain* matches *hashed*."""
     return _pwd_context.verify(plain, hashed)
+
+
+def hash_refresh_token(token: str) -> str:
+    """Return a SHA-256 hex digest of *token* for safe DB storage."""
+    import hashlib
+
+    return hashlib.sha256(token.encode()).hexdigest()
 
 
 # ---------------------------------------------------------------------------
@@ -53,9 +60,10 @@ def create_access_token(data: Dict[str, Any]) -> str:
 
 
 def create_refresh_token(data: Dict[str, Any]) -> str:
-    """Create a long-lived JWT refresh token."""
+    """Create a long-lived JWT refresh token with a unique jti to prevent collisions."""
+    data_with_jti = {**data, "jti": secrets.token_hex(16)}
     return _create_token(
-        data,
+        data_with_jti,
         timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
     )
 

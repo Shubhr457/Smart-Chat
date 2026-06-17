@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
@@ -17,6 +17,7 @@ class UserModel(BaseModel):
     email: EmailStr
     hashed_password: str
     is_active: bool = True
+    refresh_tokens: List[str] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     @classmethod
