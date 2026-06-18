@@ -110,7 +110,7 @@ async def test_login_unknown_email(test_client: AsyncClient):
 async def test_protected_me_with_token(test_client: AsyncClient):
     tokens = await register_and_login(test_client, 6)
     resp = await test_client.get(
-        "/protected/me",
+        "/auth/me",
         headers={"Authorization": f"Bearer {tokens['access_token']}"},
     )
     assert resp.status_code == 200
@@ -118,7 +118,7 @@ async def test_protected_me_with_token(test_client: AsyncClient):
 
 
 async def test_protected_me_no_token(test_client: AsyncClient):
-    resp = await test_client.get("/protected/me")
+    resp = await test_client.get("/auth/me")
     # HTTPBearer returns 401 when Authorization header is absent
     assert resp.status_code == 401
 

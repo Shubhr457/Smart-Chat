@@ -1,11 +1,9 @@
-import asyncio
-
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from motor.motor_asyncio import AsyncIOMotorClient
 
-from app.core.database import db_instance
+from app.core.database import _create_indexes, db_instance
 from app.main import app
 
 TEST_DB_NAME = "smartchat_test"
@@ -17,9 +15,8 @@ async def test_client():
     db_instance.client = AsyncIOMotorClient("mongodb://localhost:27017")
     db_instance.db = db_instance.client[TEST_DB_NAME]
 
-    # Create indexes on the test DB
-    await db_instance.db["users"].create_index("email", unique=True)
-    await db_instance.db["users"].create_index("username", unique=True)
+    # Create all indexes via the shared helper
+    await _create_indexes()
 
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"

@@ -1,5 +1,4 @@
 from typing import Annotated, Optional
-
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
@@ -23,7 +22,7 @@ async def get_current_user(
     credentials: Annotated[HTTPAuthorizationCredentials, Depends(_bearer_scheme)],
     db=Depends(get_database),
 ) -> dict:
-    """Decode the Bearer token and return the corresponding user document."""
+    """Decode the Bearer token and return the corresponding user document from MongoDB."""
     payload = decode_token(credentials.credentials)
 
     email: Optional[str] = payload.get("sub")
@@ -85,7 +84,7 @@ async def login(credentials: UserLogin, db=Depends(get_database)):
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    token_payload = {"sub": user["email"]}
+    token_payload = {"sub": user["email"], "role": user.get("role", "user")}
     access_token = create_access_token(token_payload)
     refresh_token = create_refresh_token(token_payload)
 
@@ -122,7 +121,7 @@ async def refresh(body: RefreshRequest, db=Depends(get_database)):
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    token_payload = {"sub": email}
+    token_payload = {"sub": email, "role": user.get("role", "user")}
     new_access_token = create_access_token(token_payload)
     new_refresh_token = create_refresh_token(token_payload)
 
@@ -168,6 +167,17 @@ async def logout_all(
 ):
     await auth_service.revoke_all_refresh_tokens(db, current_user["email"])
     return {"message": "Logged out from all devices"}
+
+
+@router.get(
+    "/me",
+    response_model=UserResponse,
+    summary="Get current authenticated user profile",
+)
+async def get_me(
+    current_user: Annotated[dict, Depends(get_current_user)],
+):
+    return _doc_to_response(current_user)
 
 
 def _doc_to_response(doc: dict) -> UserResponse:

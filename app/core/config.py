@@ -12,6 +12,11 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
+    # LLM API Keys
+    OPENAI_API_KEY: str = "mock-openai-key"
+    GEMINI_API_KEY: str = "mock-gemini-key"
+    RATE_LIMIT_CHAT: str = "20/minute"
+
     model_config = SettingsConfigDict(env_file=".env", env_ignore_empty=True)
 
 
