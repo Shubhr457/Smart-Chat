@@ -5,20 +5,20 @@ import asyncio
 from typing import AsyncGenerator, Dict, List, Optional
 from fastapi import HTTPException
 from openai import AsyncOpenAI
-import google.generativeai as genai
-from google.generativeai.types import GenerationConfig
+from google import genai
+from google.genai import types as genai_types
 from app.core.config import settings
 from app.schemas.llm import ChatCompletionRequest, ChatResponse, MessageParam
 
 # Initialize OpenAI Async client
 openai_client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
 
-# Configure Gemini Generative AI
-genai.configure(api_key=settings.GEMINI_API_KEY)
+# Initialize Gemini (google-genai) client
+gemini_client = genai.Client(api_key=settings.GEMINI_API_KEY)
 
 SUPPORTED_MODELS = {
     "openai": ["gpt-4o", "gpt-3.5-turbo"],
-    "gemini": ["gemini-1.5-pro", "gemini-1.5-flash"]
+    "gemini": ["gemini-2.5-pro", "gemini-2.5-flash"]
 }
 
 class LLMService:
@@ -76,8 +76,22 @@ class LLMService:
             raise HTTPException(status_code=502, detail=f"OpenAI API error: {str(e)}")
 
     @staticmethod
+    def _build_gemini_contents(request: ChatCompletionRequest):
+        """Convert chat messages into google-genai Content objects, extracting any system instruction."""
+        system_instruction = None
+        contents = []
+        for m in request.messages:
+            if m.role == "system":
+                system_instruction = m.content
+            elif m.role == "assistant":
+                contents.append(genai_types.Content(role="model", parts=[genai_types.Part(text=m.content)]))
+            else:
+                contents.append(genai_types.Content(role="user", parts=[genai_types.Part(text=m.content)]))
+        return system_instruction, contents
+
+    @staticmethod
     async def call_gemini(request: ChatCompletionRequest) -> Dict:
-        """Calls Google Gemini API or returns mock if using mock key."""
+        """Calls Google Gemini API (via google-genai) or returns mock if using mock key."""
         if settings.GEMINI_API_KEY.startswith("mock"):
             # Mock Response
             await asyncio.sleep(0.3) # simulate latency
@@ -91,42 +105,33 @@ class LLMService:
                 "completion_tokens": completion_tokens,
                 "total_tokens": prompt_tokens + completion_tokens
             }
-        
+
         # Actual API Call
-        system_instruction = None
-        contents = []
-        for m in request.messages:
-            if m.role == "system":
-                system_instruction = m.content
-            elif m.role == "assistant":
-                contents.append({"role": "model", "parts": [m.content]})
-            else:
-                contents.append({"role": "user", "parts": [m.content]})
-        
+        system_instruction, contents = LLMService._build_gemini_contents(request)
+
         try:
-            model = genai.GenerativeModel(
-                model_name=request.model,
-                system_instruction=system_instruction
-            )
-            config = GenerationConfig(
+            config = genai_types.GenerateContentConfig(
+                system_instruction=system_instruction,
                 temperature=request.temperature,
-                max_output_tokens=request.max_tokens
+                max_output_tokens=request.max_tokens,
             )
-            response = await model.generate_content_async(
-                contents,
-                generation_config=config
+            response = await gemini_client.aio.models.generate_content(
+                model=request.model,
+                contents=contents,
+                config=config,
             )
-            
-            # Estimate tokens since Gemini metadata can vary
-            prompt_tokens = model.count_tokens(contents).total_tokens
-            completion_tokens = model.count_tokens(response.text).total_tokens
-            
+
+            usage = response.usage_metadata
+            prompt_tokens = (usage.prompt_token_count if usage else None) or 0
+            completion_tokens = (usage.candidates_token_count if usage else None) or 0
+            total_tokens = (usage.total_token_count if usage else None) or (prompt_tokens + completion_tokens)
+
             return {
                 "id": f"gemini-{uuid.uuid4().hex[:12]}",
                 "content": response.text,
                 "prompt_tokens": prompt_tokens,
                 "completion_tokens": completion_tokens,
-                "total_tokens": prompt_tokens + completion_tokens
+                "total_tokens": total_tokens
             }
         except Exception as e:
             raise HTTPException(status_code=502, detail=f"Gemini API error: {str(e)}")
@@ -168,7 +173,7 @@ class LLMService:
 
     @staticmethod
     async def call_gemini_stream(request: ChatCompletionRequest) -> AsyncGenerator[Dict, None]:
-        """Streams responses from Gemini."""
+        """Streams responses from Gemini (via google-genai)."""
         if settings.GEMINI_API_KEY.startswith("mock"):
             words = f"Mock streaming response from Gemini ({request.model}): Hello! This is a token-by-token stream.".split(" ")
             for i, word in enumerate(words):
@@ -180,34 +185,28 @@ class LLMService:
                 }
             return
 
-        system_instruction = None
-        contents = []
-        for m in request.messages:
-            if m.role == "system":
-                system_instruction = m.content
-            elif m.role == "assistant":
-                contents.append({"role": "model", "parts": [m.content]})
-            else:
-                contents.append({"role": "user", "parts": [m.content]})
+        system_instruction, contents = LLMService._build_gemini_contents(request)
 
         try:
-            model = genai.GenerativeModel(
-                model_name=request.model,
-                system_instruction=system_instruction
-            )
-            config = GenerationConfig(
+            config = genai_types.GenerateContentConfig(
+                system_instruction=system_instruction,
                 temperature=request.temperature,
-                max_output_tokens=request.max_tokens
+                max_output_tokens=request.max_tokens,
             )
-            response_stream = await model.generate_content_stream_async(
-                contents,
-                generation_config=config
+            stream = await gemini_client.aio.models.generate_content_stream(
+                model=request.model,
+                contents=contents,
+                config=config,
             )
-            async for chunk in response_stream:
+            async for chunk in stream:
+                finish_reason = None
+                if chunk.candidates:
+                    reason = chunk.candidates[0].finish_reason
+                    finish_reason = reason.name if reason else None
                 yield {
                     "id": f"gemini-{uuid.uuid4().hex[:12]}",
-                    "delta": chunk.text,
-                    "finish_reason": None # Gemini stream finalization is implicit
+                    "delta": chunk.text or "",
+                    "finish_reason": finish_reason
                 }
         except Exception as e:
             yield {"error": f"Gemini Stream API error: {str(e)}"}

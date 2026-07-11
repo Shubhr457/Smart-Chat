@@ -64,7 +64,7 @@ async def test_gemini_completion_success(test_client: AsyncClient):
     resp = await test_client.post(
         "/chat/completions",
         json={
-            "model": "gemini-1.5-flash",
+            "model": "gemini-2.5-flash",
             "provider": "gemini",
             "messages": [{"role": "user", "content": "Hello"}],
         },
@@ -73,7 +73,7 @@ async def test_gemini_completion_success(test_client: AsyncClient):
     assert resp.status_code == 200
     body = resp.json()
     assert body["provider"] == "gemini"
-    assert body["model"] == "gemini-1.5-flash"
+    assert body["model"] == "gemini-2.5-flash"
     assert "content" in body
 
 
@@ -147,7 +147,7 @@ async def test_list_models_success(test_client: AsyncClient):
     assert len(models) == 4
     model_names = {m["name"] for m in models}
     assert "gpt-4o" in model_names
-    assert "gemini-1.5-flash" in model_names
+    assert "gemini-2.5-flash" in model_names
 
 
 # ---------------------------------------------------------------------------

@@ -159,7 +159,7 @@ async def get_models(current_user = Depends(get_current_user)):
     models = [
         ModelDetail(name="gpt-4o", provider="openai"),
         ModelDetail(name="gpt-3.5-turbo", provider="openai"),
-        ModelDetail(name="gemini-1.5-pro", provider="gemini"),
-        ModelDetail(name="gemini-1.5-flash", provider="gemini"),
+        ModelDetail(name="gemini-2.5-pro", provider="gemini"),
+        ModelDetail(name="gemini-2.5-flash", provider="gemini"),
     ]
     return ModelListResponse(models=models)
