@@ -29,3 +29,6 @@ Thumbs.db
 
 # Docker
 *.log
+
+# Project documents
+Smart_Chat_API_BRD.docx
